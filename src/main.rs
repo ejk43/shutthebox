@@ -4,20 +4,18 @@ fn main() {
     let mut won = false;
     let mut niter = 0;
     while !won {
-        let mut game = game::ShutTheBox::init(12);
-        println!("Hello, world!");
-        println!("My Game: {:?}", game);
-
-        let mut dice = game::Dice::new();
-        let mut valid = true;
-        while valid && !game.victory() {
-            dice.roll();
-            valid = game.play_value(dice.result());
-            println!("Roll: {:?} = {}", dice.values, dice.result());
-            println!("Result? {} / Update: {:?}", valid, game);
-        }
+        let game = game::simulate_game();
         won = game.victory();
         niter += 1;
-        println!("GAME OVER! Try number {}", niter);
+        println!(
+            "{} Try number {}",
+            match won {
+                true => "WON!!",
+                false => "Lost :(",
+            },
+            niter
+        );
+        println!("Rolls: {:?}", game.get_rolls());
+        println!("Shut: {:?}", game.get_numbers());
     }
 }

@@ -1,4 +1,6 @@
+use hdrhistogram::Histogram;
 use rand::Rng;
+use std::collections::HashMap;
 
 pub fn simulate_game() -> ShutTheBox {
     let mut game = ShutTheBox::init(12);
@@ -9,6 +11,54 @@ pub fn simulate_game() -> ShutTheBox {
         valid = game.play_roll(dice.result());
     }
     game
+}
+
+#[derive(Debug)]
+pub struct Statistics {
+    num_won: i64,
+    num_total: i64,
+    last_won: i64,
+    pub games_between_win: Histogram<u64>,
+    count_shut: Vec<i64>,
+    count_nrolls: Vec<i64>,
+    count_lastroll: Vec<i64>,
+}
+
+impl Statistics {
+    pub fn new() -> Statistics {
+        let mut default_hash = HashMap::with_capacity(12);
+        for ii in 0..12 {
+            default_hash.insert(ii, 0.0);
+        }
+        Statistics {
+            num_won: 0,
+            num_total: 0,
+            last_won: 0,
+            games_between_win: Histogram::<u64>::new(4).unwrap(),
+            count_shut: vec![0; 12],
+            count_nrolls: vec![0; 12],
+            count_lastroll: vec![0; 12],
+        }
+    }
+
+    pub fn save_game(&mut self, game: &ShutTheBox) {
+        self.num_won += game.victory() as i64;
+        if game.victory() {
+            self.games_between_win
+                .record((self.num_total - self.last_won) as u64)
+                .expect("Could not add value to histogram");
+            self.last_won = self.num_total;
+        }
+        self.num_total += 1;
+        for ii in game.get_shut() {
+            self.count_shut[ii - 1] += 1;
+        }
+        // Save Rolls
+        let rolls = game.get_rolls();
+        let nrolls = rolls.len();
+        self.count_nrolls[nrolls - 1] += 1;
+        self.count_lastroll[rolls[nrolls - 1] - 1] += 1;
+    }
 }
 
 /// ShutTheBox struct represents the game board

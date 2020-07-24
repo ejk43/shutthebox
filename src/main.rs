@@ -183,7 +183,27 @@ fn accumulate_stats(total: i64) -> Vec<(f64, f64)> {
 
 fn main() {
     // play_until_victory();
-    let nruns = 1_000_000;
+    // let nruns = 1_000_000;
     // accumulate_stats(1000);
-    accumulate_stats_par(nruns);
+    // accumulate_stats_par(nruns);
+
+    let mut game = game::ShutTheBox::init(12);
+    // assert_eq!(game.check_loss(10), false);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(10);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(9);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(8);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(7);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(6);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(4);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(1);
+    assert_eq!(game.check_loss(10), false);
+    game.shut(2);
+    assert_eq!(game.check_loss(10), true);
 }

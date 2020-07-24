@@ -1,5 +1,6 @@
 use hdrhistogram::Histogram;
 use rand::Rng;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 pub fn simulate_game() -> ShutTheBox {
@@ -87,7 +88,7 @@ impl ShutTheBox {
         Some(self.status[val - 1])
     }
 
-    fn shut(&mut self, val: usize) {
+    pub fn shut(&mut self, val: usize) {
         if val > 0 && val < self.status.len() + 1 {
             self.shut.push(val);
             self.status[val - 1] = true;
@@ -101,35 +102,53 @@ impl ShutTheBox {
 
     /// Check for loss, given a particular value and game state
     pub fn check_loss(&self, target: usize) -> bool {
-        fn sum_to_target(open: &[usize], init: usize, target: usize) -> bool {
-            let mut sum = init;
-            // println!("Init: {}", init);
-            for num in open {
-                // println!("+{}", num);
-                sum += num;
-                if sum == target {
-                    // println!("Success");
+        struct VecTotal {
+            values: Vec<usize>,
+            total: usize,
+        }
+        impl VecTotal {
+            fn push(&mut self, val: usize) {
+                self.total += val;
+                self.values.push(val)
+            }
+            fn pop(&mut self) -> usize {
+                match self.values.pop() {
+                    Some(val) => {
+                        self.total -= val;
+                        val
+                    }
+                    None => 0,
+                }
+            }
+        }
+        fn check_slice(sumvec: &mut VecTotal, slice: &[usize], target: usize) -> bool {
+            if slice.len() == 0 {
+                return false;
+            }
+            for ii in 0..slice.len() {
+                sumvec.push(slice[ii]);
+                let hit = match sumvec.total.cmp(&target) {
+                    Ordering::Less => check_slice(sumvec, &slice[ii + 1..], target),
+                    Ordering::Greater => {
+                        sumvec.pop();
+                        check_slice(sumvec, &slice[ii + 1..], target)
+                    }
+                    Ordering::Equal => true,
+                };
+                if hit {
                     return true;
                 }
-                if sum >= target - num {
-                    break;
-                }
+                sumvec.pop();
             }
             false
         }
         let open: Vec<usize> = self.iter_open().filter(|x| *x <= target).collect();
-        if open.contains(&target) {
-            return false;
-        }
-        for (idx, val) in open.iter().rev().enumerate() {
-            for start in 0..(open.len() - idx - 1) {
-                let slice = &open[start..open.len() - idx - 1];
-                if sum_to_target(slice, *val, target) {
-                    return false;
-                }
-            }
-        }
-        true
+        let mut sumvec = VecTotal {
+            values: Vec::new(),
+            total: 0,
+        };
+        let alive = check_slice(&mut sumvec, &open[0..], target);
+        !alive
     }
 
     /// Attempt to play a roll

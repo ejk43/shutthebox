@@ -15,13 +15,13 @@ pub fn simulate_game() -> ShutTheBox {
 
 #[derive(Debug)]
 pub struct Statistics {
-    num_won: i64,
-    num_total: i64,
-    last_won: i64,
+    num_won: u64,
+    num_total: u64,
+    last_won: u64,
     pub games_between_win: Histogram<u64>,
-    count_shut: Vec<i64>,
-    count_nrolls: Vec<i64>,
-    count_lastroll: Vec<i64>,
+    count_shut: Vec<u64>,
+    count_nrolls: Vec<u64>,
+    count_lastroll: Vec<u64>,
 }
 
 impl Statistics {
@@ -42,7 +42,7 @@ impl Statistics {
     }
 
     pub fn save_game(&mut self, game: &ShutTheBox) {
-        self.num_won += game.victory() as i64;
+        self.num_won += game.victory() as u64;
         if game.victory() {
             self.games_between_win
                 .record((self.num_total - self.last_won) as u64)
@@ -50,8 +50,8 @@ impl Statistics {
             self.last_won = self.num_total;
         }
         self.num_total += 1;
-        for ii in game.get_shut() {
-            self.count_shut[ii - 1] += 1;
+        for (ii, shut) in game.status.iter().enumerate() {
+            self.count_shut[ii] += *shut as u64;
         }
         // Save Rolls
         let rolls = game.get_rolls();
@@ -99,6 +99,39 @@ impl ShutTheBox {
         self.status.iter().all(|&x| x)
     }
 
+    /// Check for loss, given a particular value and game state
+    pub fn check_loss(&self, target: usize) -> bool {
+        fn sum_to_target(open: &[usize], init: usize, target: usize) -> bool {
+            let mut sum = init;
+            // println!("Init: {}", init);
+            for num in open {
+                // println!("+{}", num);
+                sum += num;
+                if sum == target {
+                    // println!("Success");
+                    return true;
+                }
+                if sum >= target - num {
+                    break;
+                }
+            }
+            false
+        }
+        let open: Vec<usize> = self.iter_open().filter(|x| *x <= target).collect();
+        if open.contains(&target) {
+            return false;
+        }
+        for (idx, val) in open.iter().rev().enumerate() {
+            for start in 0..(open.len() - idx - 1) {
+                let slice = &open[start..open.len() - idx - 1];
+                if sum_to_target(slice, *val, target) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Attempt to play a roll
     /// Returns true if the roll was played successfully...
     /// Returns false if the game is OVER
@@ -135,16 +168,36 @@ impl ShutTheBox {
     /// Return ordered vector of numbers that have been shut
     pub fn get_shut(&self) -> Vec<usize> {
         // Ordered list of numbers that have been shut
-        (1..self.status.len() + 1)
-            .filter(|ii| self.get(*ii).unwrap())
-            .collect()
+        // (1..self.status.len() + 1)
+        //     .filter(|ii| self.get(*ii).unwrap())
+        //     .collect()
+        self.iter_shut().collect()
+    }
+
+    pub fn iter_shut<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
+        // Iterator of numbers that have been shut
+        // (1..self.status.len() + 1)
+        //     .filter(|ii| self.get(*ii).unwrap())
+        //     .collect()
+        self.status
+            .iter()
+            .enumerate()
+            .filter(|shut| *shut.1)
+            .map(|pair| pair.0 + 1)
     }
 
     /// Return ordered vector of numbers that are still open
     pub fn get_open(&self) -> Vec<usize> {
-        (1..self.status.len() + 1)
-            .filter(|ii| !self.get(*ii).unwrap())
-            .collect()
+        self.iter_open().collect()
+    }
+
+    pub fn iter_open<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
+        // Iterator of numbers that are still open
+        self.status
+            .iter()
+            .enumerate()
+            .filter(|shut| !*shut.1)
+            .map(|pair| pair.0 + 1)
     }
 
     /// Return vector of rolls, in the order they were played
@@ -191,6 +244,61 @@ mod tests {
         let mut dice = Dice::new();
         dice.roll();
         assert_eq!(dice.result(), dice.values.0 + dice.values.1);
+    }
+
+    #[test]
+    fn test_shutthebox_loss() {
+        let max = 12;
+        let mut game = ShutTheBox::init(max);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(10);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(9);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(8);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(7);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(6);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(4);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(1);
+        assert_eq!(game.check_loss(10), false);
+        game.shut(2);
+        assert_eq!(game.check_loss(10), true);
+    }
+
+    #[test]
+    fn test_shutthebox_loss_edge() {
+        let max = 12;
+        let mut game = ShutTheBox::init(max);
+        assert_eq!(game.check_loss(10), false);
+        game.play_roll(5);
+        game.play_roll(9);
+        game.play_roll(7);
+        game.play_roll(11);
+        game.play_roll(10);
+        game.play_roll(6);
+        game.play_roll(11);
+        assert_eq!(game.check_loss(11), true);
+    }
+
+    #[test]
+    fn test_shutthebox_loss_edge2() {
+        let max = 12;
+        let mut game = ShutTheBox::init(max);
+        assert_eq!(game.check_loss(12), false);
+        game.shut(12);
+        game.shut(11);
+        game.shut(10);
+        game.shut(9);
+        game.shut(8);
+        game.shut(7);
+        game.shut(3);
+        assert_eq!(game.check_loss(12), false);
+        // game.shut(5);
+        assert_eq!(game.check_loss(11), false);
     }
 
     #[test]

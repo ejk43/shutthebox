@@ -14,10 +14,14 @@ use tui::{
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>) {
     let chunks = Layout::default()
-        .constraints([Constraint::Length(10), Constraint::Min(0)].as_ref())
+        .constraints([Constraint::Length(12), Constraint::Min(0)].as_ref())
         .split(f.size());
-    let block = Block::default().title("Block").borders(Borders::ALL);
+    let block = Block::default()
+        .title("Shut the Box!")
+        .borders(Borders::ALL);
     f.render_widget(block, chunks[0]);
+    draw_boxes(f, chunks[0]);
+
     let block = Block::default().title("Block 2").borders(Borders::ALL);
     f.render_widget(block, chunks[1]);
     let x_labels = vec![
@@ -55,4 +59,25 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>) {
                 ]),
         );
     f.render_widget(chart, chunks[1]);
+}
+
+fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect) {
+    // let vert = Layout::default()
+    //     .constraints([Constraint::Min(1), Constraint::Min(5), Constraint::Max(1)].as_ref())
+    //     .split(area);
+    let nboxes = 7;
+    let pct = (100.0 / nboxes as f64).floor() as u16;
+    // let constraints = vec![Constraint::Percentage(pct); nboxes];
+    let constraints = vec![Constraint::Ratio(1, nboxes); nboxes as usize];
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .margin(1)
+        .constraints(constraints)
+        .split(area);
+    for (ii, chunk) in chunks.iter().enumerate() {
+        let block = Block::default()
+            .title(format!("{}", ii + 1))
+            .borders(Borders::ALL);
+        f.render_widget(block, *chunk);
+    }
 }

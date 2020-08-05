@@ -1,33 +1,20 @@
+#[allow(dead_code)]
 mod event;
 pub mod game;
 mod ui;
 
-use std::time::{Duration, Instant};
-use std::{error::Error, io};
-
 use crate::event::{Config, Event, Events};
 
+use std::time::{Duration, Instant};
+use std::{error::Error, io};
+use termion::clear;
 use termion::raw::IntoRawMode;
-use tui::backend::TermionBackend;
-// use tui::layout::{Constraint, Direction, Layout};
-// use tui::widgets::{Block, Borders, Widget};
 use termion::{event::Key, input::MouseTerminal, screen::AlternateScreen};
+use tui::backend::TermionBackend;
 use tui::Terminal;
 
-use termion::clear;
-use tui::{
-    backend::Backend,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    symbols,
-    text::{Span, Spans},
-    widgets::canvas::{Canvas, Line, Map, MapResolution, Rectangle},
-    widgets::{
-        Axis, BarChart, Block, Borders, Chart, Dataset, Gauge, List, ListItem, Paragraph, Row,
-        Sparkline, Table, Tabs, Wrap,
-    },
-    Frame,
-};
+use rayon::prelude::*;
+use std::sync::Mutex;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // println!("{}", clear::All);
@@ -44,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     loop {
-        terminal.draw(|f| ui::draw(f, &result));
+        terminal.draw(|f| ui::draw(f, &result))?;
 
         let mut should_quit = false;
         match events.next()? {
@@ -87,10 +74,6 @@ fn play_until_victory() {
     }
 }
 
-use rayon::prelude::*;
-use std::sync::mpsc::channel;
-use std::sync::Mutex;
-
 fn accumulate_stats_par(total: i64) -> Vec<(f64, f64)> {
     let start = Instant::now();
     let mut statsmutex = Mutex::new(game::Statistics::new());
@@ -104,7 +87,7 @@ fn accumulate_stats_par(total: i64) -> Vec<(f64, f64)> {
     let duration = start.elapsed();
     // println!("Time elapsed in expensive_function() is: {:?}", duration);
 
-    let mut stats = statsmutex.lock().unwrap();
+    let stats = statsmutex.lock().unwrap();
     let mut sum = 0;
     let mut hist = Vec::new();
     for bounds in (0..1950).step_by(50).zip((50..2000).step_by(50)) {

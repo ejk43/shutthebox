@@ -62,6 +62,49 @@ impl Statistics {
     }
 }
 
+struct VecTotal {
+    values: Vec<usize>,
+    total: usize,
+}
+
+impl VecTotal {
+    fn push(&mut self, val: usize) {
+        self.total += val;
+        self.values.push(val)
+    }
+    fn pop(&mut self) -> usize {
+        match self.values.pop() {
+            Some(val) => {
+                self.total -= val;
+                val
+            }
+            None => 0,
+        }
+    }
+}
+
+fn check_slice(sumvec: &mut VecTotal, slice: &[usize], target: usize) -> bool {
+    if slice.len() == 0 {
+        return false;
+    }
+    for ii in 0..slice.len() {
+        sumvec.push(slice[ii]);
+        let hit = match sumvec.total.cmp(&target) {
+            Ordering::Less => check_slice(sumvec, &slice[ii + 1..], target),
+            Ordering::Greater => {
+                sumvec.pop();
+                check_slice(sumvec, &slice[ii + 1..], target)
+            }
+            Ordering::Equal => true,
+        };
+        if hit {
+            return true;
+        }
+        sumvec.pop();
+    }
+    false
+}
+
 /// ShutTheBox struct represents the game board
 #[derive(Debug)]
 pub struct ShutTheBox {
@@ -102,52 +145,15 @@ impl ShutTheBox {
 
     /// Check for loss, given a particular value and game state
     pub fn check_loss(&self, target: usize) -> bool {
-        struct VecTotal {
-            values: Vec<usize>,
-            total: usize,
-        }
-        impl VecTotal {
-            fn push(&mut self, val: usize) {
-                self.total += val;
-                self.values.push(val)
-            }
-            fn pop(&mut self) -> usize {
-                match self.values.pop() {
-                    Some(val) => {
-                        self.total -= val;
-                        val
-                    }
-                    None => 0,
-                }
-            }
-        }
-        fn check_slice(sumvec: &mut VecTotal, slice: &[usize], target: usize) -> bool {
-            if slice.len() == 0 {
-                return false;
-            }
-            for ii in 0..slice.len() {
-                sumvec.push(slice[ii]);
-                let hit = match sumvec.total.cmp(&target) {
-                    Ordering::Less => check_slice(sumvec, &slice[ii + 1..], target),
-                    Ordering::Greater => {
-                        sumvec.pop();
-                        check_slice(sumvec, &slice[ii + 1..], target)
-                    }
-                    Ordering::Equal => true,
-                };
-                if hit {
-                    return true;
-                }
-                sumvec.pop();
-            }
-            false
-        }
         let open: Vec<usize> = self.iter_open().filter(|x| *x <= target).collect();
         let mut sumvec = VecTotal {
             values: Vec::new(),
             total: 0,
         };
         let alive = check_slice(&mut sumvec, &open[0..], target);
+        // if alive {
+        //     println!("Valid Open: {:?}", sumvec.values);
+        // }
         !alive
     }
 
@@ -179,6 +185,19 @@ impl ShutTheBox {
                     self.shut(ii);
                     return true;
                 }
+            }
+            // Next try to split the roll N-way
+            let open: Vec<usize> = self.iter_open().filter(|x| *x <= roll).collect();
+            let mut sumvec = VecTotal {
+                values: Vec::new(),
+                total: 0,
+            };
+            let alive = check_slice(&mut sumvec, &open[0..], roll);
+            if alive {
+                for ii in sumvec.values.iter() {
+                    self.shut(*ii);
+                }
+                return true;
             }
             return false;
         }

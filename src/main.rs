@@ -1,8 +1,11 @@
+pub mod event;
 pub mod game;
 
 use std::time::{Duration, Instant};
+use std::{error::Error, io};
 
-use std::io;
+use event::{Config, Event, Events};
+
 use termion::raw::IntoRawMode;
 use tui::backend::TermionBackend;
 // use tui::layout::{Constraint, Direction, Layout};
@@ -25,60 +28,86 @@ use tui::{
     Frame,
 };
 
-// fn main() -> Result<(), io::Error> {
-//     println!("{}", clear::All);
-//     let result = accumulate_stats(1_000_000);
-//     let stdout = io::stdout().into_raw_mode()?;
-//     // let stdout = MouseTerminal::from(stdout);
-//     // let stdout = AlternateScreen::from(stdout);
-//     let backend = TermionBackend::new(stdout);
-//     let mut terminal = Terminal::new(backend)?;
-//     terminal.draw(|mut f| {
-//         let chunks = Layout::default()
-//             .constraints([Constraint::Length(5), Constraint::Min(0)].as_ref())
-//             .split(f.size());
-//         let block = Block::default().title("Block").borders(Borders::ALL);
-//         f.render_widget(block, chunks[0]);
-//         let block = Block::default().title("Block 2").borders(Borders::ALL);
-//         f.render_widget(block, chunks[1]);
+fn main() -> Result<(), Box<dyn Error>> {
+    println!("{}", clear::All);
+    let result = accumulate_stats_par(100_000);
+    let stdout = io::stdout().into_raw_mode()?;
+    let stdout = MouseTerminal::from(stdout);
+    let stdout = AlternateScreen::from(stdout);
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
-//         let x_labels = vec![
-//             Span::raw(format!("{}", 0)),
-//             Span::raw(format!("{}", 1000)),
-//             Span::raw(format!("{}", 2000)),
-//         ];
-//         let datasets = vec![Dataset::default()
-//             .name("Count")
-//             .marker(symbols::Marker::Dot)
-//             .style(Style::default().fg(Color::Cyan))
-//             .data(&result)];
-//         let chart = Chart::new(datasets)
-//             .block(
-//                 Block::default()
-//                     .title(Span::styled("Chart", Style::default().fg(Color::Cyan)))
-//                     .borders(Borders::ALL),
-//             )
-//             .x_axis(
-//                 Axis::default()
-//                     .title("X Axis")
-//                     .style(Style::default().fg(Color::Gray))
-//                     .bounds([0.0, 2000.0])
-//                     .labels(x_labels),
-//             )
-//             .y_axis(
-//                 Axis::default()
-//                     .title("Y Axis")
-//                     .style(Style::default().fg(Color::Gray))
-//                     .bounds([0.0, 1000.0])
-//                     .labels(vec![
-//                         Span::styled("-20", Style::default().add_modifier(Modifier::BOLD)),
-//                         Span::raw("0"),
-//                         Span::styled("1000", Style::default().add_modifier(Modifier::BOLD)),
-//                     ]),
-//             );
-//         f.render_widget(chart, chunks[1]);
-//     })
-// }
+    let events = Events::with_config(Config {
+        tick_rate: Duration::from_millis(250),
+        ..Config::default()
+    });
+
+    loop {
+        terminal.draw(|mut f| {
+            let chunks = Layout::default()
+                .constraints([Constraint::Length(5), Constraint::Min(0)].as_ref())
+                .split(f.size());
+            let block = Block::default().title("Block").borders(Borders::ALL);
+            f.render_widget(block, chunks[0]);
+            let block = Block::default().title("Block 2").borders(Borders::ALL);
+            f.render_widget(block, chunks[1]);
+            let x_labels = vec![
+                Span::raw(format!("{}", 0)),
+                Span::raw(format!("{}", 1000)),
+                Span::raw(format!("{}", 2000)),
+            ];
+            let datasets = vec![Dataset::default()
+                .name("Count")
+                .marker(symbols::Marker::Dot)
+                .style(Style::default().fg(Color::Cyan))
+                .data(&result)];
+            let chart = Chart::new(datasets)
+                .block(
+                    Block::default()
+                        .title(Span::styled("Chart", Style::default().fg(Color::Cyan)))
+                        .borders(Borders::ALL),
+                )
+                .x_axis(
+                    Axis::default()
+                        .title("X Axis")
+                        .style(Style::default().fg(Color::Gray))
+                        .bounds([0.0, 2000.0])
+                        .labels(x_labels),
+                )
+                .y_axis(
+                    Axis::default()
+                        .title("Y Axis")
+                        .style(Style::default().fg(Color::Gray))
+                        .bounds([0.0, 1000.0])
+                        .labels(vec![
+                            Span::styled("-20", Style::default().add_modifier(Modifier::BOLD)),
+                            Span::raw("0"),
+                            Span::styled("1000", Style::default().add_modifier(Modifier::BOLD)),
+                        ]),
+                );
+            f.render_widget(chart, chunks[1]);
+        });
+
+        let mut should_quit = false;
+        match events.next()? {
+            Event::Input(key) => match key {
+                Key::Char(c) => match c {
+                    'q' => {
+                        should_quit = true;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            },
+            Event::Tick => {}
+        }
+        if should_quit {
+            break;
+        }
+    }
+    println!("{}", clear::All);
+    Ok(())
+}
 
 fn play_until_victory() {
     let mut won = false;
@@ -115,7 +144,7 @@ fn accumulate_stats_par(total: i64) -> Vec<(f64, f64)> {
     });
 
     let duration = start.elapsed();
-    println!("Time elapsed in expensive_function() is: {:?}", duration);
+    // println!("Time elapsed in expensive_function() is: {:?}", duration);
 
     let mut stats = statsmutex.lock().unwrap();
     let mut sum = 0;
@@ -124,16 +153,16 @@ fn accumulate_stats_par(total: i64) -> Vec<(f64, f64)> {
         let count = stats
             .games_between_win
             .count_between(bounds.0, bounds.1 - 1);
-        println!(
-            "Amount between {} and {}: {}",
-            bounds.0,
-            bounds.1 - 1,
-            count
-        );
+        // println!(
+        //     "Amount between {} and {}: {}",
+        //     bounds.0,
+        //     bounds.1 - 1,
+        //     count
+        // );
         sum += count;
         hist.push(((bounds.0 as f64 + bounds.1 as f64) / 2.0, count as f64));
     }
-    println!("total: {}", sum);
+    // println!("total: {}", sum);
     hist
 }
 
@@ -143,9 +172,9 @@ fn accumulate_stats(total: i64) -> Vec<(f64, f64)> {
     for _ in 0..total {
         let game = game::simulate_game();
         let rolls = game.get_rolls();
-        if !game.check_loss(rolls[rolls.len() - 1]) {
-            println!("Funky game! {:?}", game)
-        }
+        // if !game.check_loss(rolls[rolls.len() - 1]) {
+        //     println!("Funky game! {:?}", game)
+        // }
         stats.save_game(&game);
         // println!("One Game: {:?}", game);
     }
@@ -181,29 +210,10 @@ fn accumulate_stats(total: i64) -> Vec<(f64, f64)> {
     hist
 }
 
-fn main() {
-    // play_until_victory();
-    // let nruns = 1_000_000;
-    // accumulate_stats(1000);
-    // accumulate_stats_par(nruns);
-
-    let mut game = game::ShutTheBox::init(12);
-    // assert_eq!(game.check_loss(10), false);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(10);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(9);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(8);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(7);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(6);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(4);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(1);
-    assert_eq!(game.check_loss(10), false);
-    game.shut(2);
-    assert_eq!(game.check_loss(10), true);
-}
+// fn main() {
+//     // play_until_victory();
+//     // let nruns = 10_000_000;
+//     // let nruns = 1000;
+//     // accumulate_stats(nruns);
+//     // accumulate_stats_par(nruns);
+// }

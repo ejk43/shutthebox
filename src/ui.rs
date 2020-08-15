@@ -6,13 +6,13 @@ use tui::{
     text::{Span, Spans},
     widgets::canvas::{Canvas, Line, Map, MapResolution, Rectangle},
     widgets::{
-        Axis, BarChart, Block, Borders, Chart, Dataset, Gauge, List, ListItem, Paragraph, Row,
-        Sparkline, Table, Tabs, Wrap,
+        Axis, BarChart, Block, Borders, Chart, Dataset, Gauge, List, ListItem, ListState,
+        Paragraph, Row, Sparkline, Table, Tabs, Wrap,
     },
     Frame,
 };
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>) {
+pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>, list_state: &mut ListState) {
     let chunks = Layout::default()
         .constraints([Constraint::Length(12), Constraint::Min(0)].as_ref())
         .split(f.size());
@@ -22,8 +22,59 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>) {
     f.render_widget(block, chunks[0]);
     draw_boxes(f, chunks[0]);
 
+    let chunks2 = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(30), Constraint::Min(0)].as_ref())
+        .split(chunks[1]);
+    draw_text(f, chunks2[0], list_state);
+    draw_plots(f, chunks2[1], result);
+}
+
+fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect) {
+    // let vert = Layout::default()
+    //     .constraints([Constraint::Min(1), Constraint::Min(5), Constraint::Max(1)].as_ref())
+    //     .split(area);
+    let nboxes = 12;
+    let constraints = vec![Constraint::Ratio(1, nboxes); nboxes as usize];
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .margin(1)
+        .constraints(constraints)
+        .split(area);
+    for (ii, chunk) in chunks.iter().enumerate() {
+        let block = Block::default()
+            .title(format!("{}", ii + 1))
+            .borders(Borders::ALL);
+        f.render_widget(block, *chunk);
+    }
+}
+
+fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, list_state: &mut ListState) {
+    // let block2 = Block::default().title("Selection").borders(Borders::ALL);
+    // f.render_widget(block2, area);
+
+    // Draw tasks
+    let rawtasks: Vec<&str> = vec![
+        "Play Manually!",
+        "Autoplay: 1x",
+        "Autoplay: 10x",
+        "Autoplay: Fast",
+        "Autoplay: Plaid",
+    ];
+    let tasks: Vec<ListItem> = rawtasks
+        .iter()
+        .map(|i| ListItem::new(vec![Spans::from(Span::raw(*i))]))
+        .collect();
+    let tasks = List::new(tasks)
+        .block(Block::default().borders(Borders::ALL).title("List"))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .highlight_symbol("> ");
+    f.render_stateful_widget(tasks, area, list_state);
+}
+
+fn draw_plots<B: Backend>(f: &mut Frame<B>, area: Rect, result: &Vec<(f64, f64)>) {
     let block = Block::default().title("Block 2").borders(Borders::ALL);
-    f.render_widget(block, chunks[1]);
+    f.render_widget(block, area);
     let x_labels = vec![
         Span::raw(format!("{}", 0)),
         Span::raw(format!("{}", 1000)),
@@ -58,26 +109,5 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>) {
                     Span::styled("1000", Style::default().add_modifier(Modifier::BOLD)),
                 ]),
         );
-    f.render_widget(chart, chunks[1]);
-}
-
-fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect) {
-    // let vert = Layout::default()
-    //     .constraints([Constraint::Min(1), Constraint::Min(5), Constraint::Max(1)].as_ref())
-    //     .split(area);
-    let nboxes = 7;
-    let pct = (100.0 / nboxes as f64).floor() as u16;
-    // let constraints = vec![Constraint::Percentage(pct); nboxes];
-    let constraints = vec![Constraint::Ratio(1, nboxes); nboxes as usize];
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .margin(1)
-        .constraints(constraints)
-        .split(area);
-    for (ii, chunk) in chunks.iter().enumerate() {
-        let block = Block::default()
-            .title(format!("{}", ii + 1))
-            .borders(Borders::ALL);
-        f.render_widget(block, *chunk);
-    }
+    f.render_widget(chart, area);
 }

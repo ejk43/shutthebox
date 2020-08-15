@@ -11,6 +11,7 @@ use termion::clear;
 use termion::raw::IntoRawMode;
 use termion::{event::Key, input::MouseTerminal, screen::AlternateScreen};
 use tui::backend::TermionBackend;
+use tui::widgets::ListState;
 use tui::Terminal;
 
 use rayon::prelude::*;
@@ -30,8 +31,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..Config::default()
     });
 
+    let mut list_state = ListState::default();
+    list_state.select(Some(0));
+
     loop {
-        terminal.draw(|f| ui::draw(f, &result))?;
+        terminal.draw(|f| ui::draw(f, &result, &mut list_state))?;
 
         let mut should_quit = false;
         match events.next()? {
@@ -42,6 +46,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     _ => {}
                 },
+                Key::Up => {
+                    let i = match list_state.selected() {
+                        Some(i) => i - 1,
+                        None => 0,
+                    };
+                    list_state.select(Some(i));
+                }
+                Key::Down => {
+                    let i = match list_state.selected() {
+                        Some(i) => i + 1,
+                        None => 0,
+                    };
+                    list_state.select(Some(i));
+                }
                 _ => {}
             },
             Event::Tick => {}

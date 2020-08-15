@@ -1,3 +1,4 @@
+use crate::game::{ShutTheBox, Statistics};
 use tui::widgets::ListState;
 
 const TASKS: [&str; 5] = [
@@ -8,10 +9,22 @@ const TASKS: [&str; 5] = [
     "Autoplay: Plaid",
 ];
 
+pub enum AppState {
+    Idle,
+    ManualGame,
+    Auto1x,
+    Auto10x,
+    AutoFast,
+    AutoPlaid,
+}
+
 pub struct App<'a> {
     pub title: &'a str,
     pub should_quit: bool,
+    pub state: AppState,
     pub tasks: StatefulList<&'a str>,
+    pub game: ShutTheBox,
+    pub stats: Statistics,
 }
 
 impl<'a> App<'a> {
@@ -19,7 +32,10 @@ impl<'a> App<'a> {
         App {
             title,
             should_quit: false,
+            state: AppState::Idle,
             tasks: StatefulList::with_items(TASKS.to_vec()),
+            game: ShutTheBox::init(12),
+            stats: Statistics::new(),
         }
     }
 
@@ -29,6 +45,22 @@ impl<'a> App<'a> {
 
     pub fn on_down(&mut self) {
         self.tasks.next();
+    }
+
+    pub fn on_enter(&mut self) {
+        match self.state {
+            AppState::Idle => {
+                // Start selected game
+                match self.tasks.state.selected() {
+                    Some(0) => {
+                        self.state = AppState::ManualGame;
+                        self.game = ShutTheBox::init(12);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
     }
 
     // pub fn on_right(&mut self) {
@@ -43,6 +75,9 @@ impl<'a> App<'a> {
         match c {
             'q' => {
                 self.should_quit = true;
+            }
+            '\n' => {
+                self.on_enter();
             }
             _ => {}
         }

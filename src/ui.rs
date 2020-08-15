@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, AppState};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -61,8 +61,12 @@ fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
         .iter()
         .map(|i| ListItem::new(vec![Spans::from(Span::raw(*i))]))
         .collect();
+    let title = match app.state {
+        AppState::ManualGame => "Manual!",
+        _ => "Select Game",
+    };
     let tasks = List::new(tasks)
-        .block(Block::default().borders(Borders::ALL).title("List"))
+        .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
     f.render_stateful_widget(tasks, area, &mut app.tasks.state);

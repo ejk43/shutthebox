@@ -111,19 +111,21 @@ pub struct ShutTheBox {
     status: Vec<bool>, // Indicate TRUE if SHUT
     rolls: Vec<usize>, // Ordered Roll History
     shut: Vec<usize>,  // Ordered Number History
+    pub total: usize,  // Number of boxes
 }
 
 impl ShutTheBox {
     /// Initialize ShutTheBox with a max size
-    pub fn init(max: usize) -> ShutTheBox {
+    pub fn init(total: usize) -> ShutTheBox {
         ShutTheBox {
-            status: vec![false; max],
-            rolls: Vec::with_capacity(max),
-            shut: Vec::with_capacity(max),
+            status: vec![false; total],
+            rolls: Vec::with_capacity(total),
+            shut: Vec::with_capacity(total),
+            total: total,
         }
     }
 
-    fn get(&self, val: usize) -> Option<bool> {
+    pub fn get_status(&self, val: usize) -> Option<bool> {
         // 1-indexed... cannot be 0 or > capacity
         if val == 0 || val > self.status.len() {
             return None;
@@ -165,7 +167,7 @@ impl ShutTheBox {
         self.rolls.push(roll);
 
         // Check if open
-        let open = match self.get(roll) {
+        let open = match self.get_status(roll) {
             Some(false) => true,
             Some(true) => false,
             None => false,
@@ -178,8 +180,8 @@ impl ShutTheBox {
         } else {
             // Try to split the roll if otherwise
             for ii in 1..(roll as f32 / 2.0).ceil() as usize {
-                let closed_high = self.get(roll - ii).unwrap();
-                let closed_low = self.get(ii).unwrap();
+                let closed_high = self.get_status(roll - ii).unwrap();
+                let closed_low = self.get_status(ii).unwrap();
                 if !closed_low && !closed_high {
                     self.shut(roll - ii);
                     self.shut(ii);
@@ -270,6 +272,21 @@ impl Dice {
     pub fn result(&self) -> usize {
         self.values.0 + self.values.1
     }
+
+    pub fn pprint(&self) -> String {
+        fn onedie(val: usize) -> &'static str {
+            match val {
+                1 => "⚀",
+                2 => "⚁",
+                3 => "⚂",
+                4 => "⚃",
+                5 => "⚄",
+                6 => "⚅",
+                _ => "?",
+            }
+        }
+        format!("{} {}", onedie(self.values.0), onedie(self.values.1))
+    }
 }
 
 #[cfg(test)]
@@ -345,12 +362,12 @@ mod tests {
         let mut game = ShutTheBox::init(max);
         let valid = game.play_roll(3);
         assert_eq!(valid, true);
-        assert_eq!(game.get(3).unwrap(), true);
+        assert_eq!(game.get_status(3).unwrap(), true);
         let valid = game.play_roll(3);
         assert_eq!(valid, true);
-        assert_eq!(game.get(1).unwrap(), true);
-        assert_eq!(game.get(2).unwrap(), true);
-        assert_eq!(game.get(3).unwrap(), true);
+        assert_eq!(game.get_status(1).unwrap(), true);
+        assert_eq!(game.get_status(2).unwrap(), true);
+        assert_eq!(game.get_status(3).unwrap(), true);
     }
 
     #[test]
@@ -359,12 +376,12 @@ mod tests {
         let mut game = ShutTheBox::init(max);
         let valid = game.play_roll(4);
         assert_eq!(valid, true);
-        assert_eq!(game.get(4).unwrap(), true);
+        assert_eq!(game.get_status(4).unwrap(), true);
         let valid = game.play_roll(4);
         assert_eq!(valid, true);
-        assert_eq!(game.get(1).unwrap(), true);
-        assert_eq!(game.get(3).unwrap(), true);
-        assert_eq!(game.get(2).unwrap(), false);
+        assert_eq!(game.get_status(1).unwrap(), true);
+        assert_eq!(game.get_status(3).unwrap(), true);
+        assert_eq!(game.get_status(2).unwrap(), false);
         let valid = game.play_roll(4);
         assert_eq!(valid, false);
     }
@@ -375,15 +392,15 @@ mod tests {
         let mut game = ShutTheBox::init(max);
         let valid = game.play_roll(5);
         assert_eq!(valid, true);
-        assert_eq!(game.get(5).unwrap(), true);
+        assert_eq!(game.get_status(5).unwrap(), true);
         let valid = game.play_roll(5);
         assert_eq!(valid, true);
-        assert_eq!(game.get(1).unwrap(), true);
-        assert_eq!(game.get(4).unwrap(), true);
+        assert_eq!(game.get_status(1).unwrap(), true);
+        assert_eq!(game.get_status(4).unwrap(), true);
         let valid = game.play_roll(5);
         assert_eq!(valid, true);
-        assert_eq!(game.get(2).unwrap(), true);
-        assert_eq!(game.get(3).unwrap(), true);
+        assert_eq!(game.get_status(2).unwrap(), true);
+        assert_eq!(game.get_status(3).unwrap(), true);
     }
 
     #[test]
@@ -396,12 +413,12 @@ mod tests {
         assert_eq!(valid, true);
         let valid = game.play_roll(6);
         assert_eq!(valid, true);
-        assert_eq!(game.get(1).unwrap(), true);
-        assert_eq!(game.get(2).unwrap(), true);
-        assert_eq!(game.get(3).unwrap(), false);
-        assert_eq!(game.get(4).unwrap(), true);
-        assert_eq!(game.get(5).unwrap(), true);
-        assert_eq!(game.get(6).unwrap(), true);
+        assert_eq!(game.get_status(1).unwrap(), true);
+        assert_eq!(game.get_status(2).unwrap(), true);
+        assert_eq!(game.get_status(3).unwrap(), false);
+        assert_eq!(game.get_status(4).unwrap(), true);
+        assert_eq!(game.get_status(5).unwrap(), true);
+        assert_eq!(game.get_status(6).unwrap(), true);
         let valid = game.play_roll(6);
         assert_eq!(valid, false);
     }
@@ -412,7 +429,7 @@ mod tests {
         let game = ShutTheBox::init(max);
         assert_eq!(game.status.capacity(), 9);
         for ii in 1..max + 1 {
-            assert_eq!(game.get(ii), Some(false));
+            assert_eq!(game.get_status(ii), Some(false));
         }
     }
 
@@ -422,7 +439,7 @@ mod tests {
         let game = ShutTheBox::init(max);
         assert_eq!(game.status.capacity(), 12);
         for ii in 1..max + 1 {
-            assert_eq!(game.get(ii), Some(false));
+            assert_eq!(game.get_status(ii), Some(false));
         }
     }
 
@@ -431,16 +448,16 @@ mod tests {
         let max = 9;
         let game = ShutTheBox::init(max);
         assert_eq!(game.status.capacity(), 9);
-        assert_eq!(game.get(9), Some(false));
-        assert_eq!(game.get(0), None);
-        assert_eq!(game.get(10), None);
+        assert_eq!(game.get_status(9), Some(false));
+        assert_eq!(game.get_status(0), None);
+        assert_eq!(game.get_status(10), None);
     }
 
     #[test]
     fn test_shutthebox_shut_1() {
         let mut game = ShutTheBox::init(12);
         game.shut(1);
-        assert_eq!(game.get(1), Some(true));
+        assert_eq!(game.get_status(1), Some(true));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::app::{App, AppState};
 use tui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
     text::{Span, Spans},
@@ -17,24 +17,32 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>, app: &mut Ap
     let chunks = Layout::default()
         .constraints([Constraint::Length(12), Constraint::Min(0)].as_ref())
         .split(f.size());
-    let block = Block::default()
-        .title("Shut the Box!")
-        .borders(Borders::ALL);
-    f.render_widget(block, chunks[0]);
-    draw_boxes(f, chunks[0]);
 
-    let chunks2 = Layout::default()
+    draw_boxes(f, chunks[0], app);
+
+    let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(30), Constraint::Min(0)].as_ref())
         .split(chunks[1]);
-    draw_text(f, chunks2[0], app);
-    draw_plots(f, chunks2[1], result);
+    {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(5), Constraint::Min(0)].as_ref())
+            .split(chunks[0]);
+        {
+            draw_dice(f, chunks[0], app);
+            draw_text(f, chunks[1], app);
+        }
+    }
+    draw_plots(f, chunks[1], result);
 }
 
-fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect) {
-    // let vert = Layout::default()
-    //     .constraints([Constraint::Min(1), Constraint::Min(5), Constraint::Max(1)].as_ref())
-    //     .split(area);
+fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
+    let block = Block::default()
+        .title("Shut the Box!")
+        .borders(Borders::ALL);
+    f.render_widget(block, area);
+
     let nboxes = 12;
     let constraints = vec![Constraint::Ratio(1, nboxes); nboxes as usize];
     let chunks = Layout::default()
@@ -43,11 +51,60 @@ fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect) {
         .constraints(constraints)
         .split(area);
     for (ii, chunk) in chunks.iter().enumerate() {
-        let block = Block::default()
-            .title(format!("{}", ii + 1))
-            .borders(Borders::ALL);
-        f.render_widget(block, *chunk);
+        // let block = Block::default()
+        //     .title(format!("{}", ii + 1))
+        //     .borders(Borders::ALL);
+        // f.render_widget(block, *chunk);
+        let halfway = (chunk.height as f32 / 2.0).floor() as usize - 2;
+        let mut text = vec![Spans::from(Span::raw("")); halfway];
+        text.push(Spans::from(Span::raw(format!("{}", ii + 1))));
+        let mut paragraph = Paragraph::new(text)
+            .block(Block::default().borders(Borders::ALL))
+            .style(Style::default().fg(Color::White).bg(Color::Black))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+        if app.state == AppState::ManualGame {
+            if app.staging.iter().any(|&x| x == ii) {
+                paragraph = paragraph.style(Style::default().fg(Color::Green).bg(Color::Black));
+            }
+            if ii == app.selection {
+                paragraph = paragraph.style(Style::default().fg(Color::Red).bg(Color::Black));
+            }
+        }
+        f.render_widget(paragraph, *chunk);
     }
+}
+
+fn draw_dice<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
+    let text = match app.state {
+        AppState::ManualGame => vec![
+            Spans::from(Span::styled(
+                app.dice.pprint(),
+                Style::default().fg(Color::Red),
+            )),
+            Spans::from(Span::styled(
+                format!("ROLL = {}", app.dice.result()),
+                Style::default().fg(Color::Red),
+            )),
+            Spans::from(Span::styled(
+                format!(
+                    "TOTAL = {}",
+                    app.staging.iter().fold(0, |acc, x| acc + x + 1)
+                ),
+                Style::default().fg(Color::Red),
+            )),
+        ],
+        _ => vec![
+            Spans::from(Span::styled("⚀ ⚁ ⚂ ⚃ ⚄ ⚅", Style::default().fg(Color::Red))),
+            Spans::from(Span::styled("ROLL", Style::default().fg(Color::Red))),
+            Spans::from(Span::styled("TOTAL", Style::default().fg(Color::Red))),
+        ],
+    };
+    let paragraph = Paragraph::new(text)
+        .block(Block::default().title("Dice").borders(Borders::ALL))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+    f.render_widget(paragraph, area);
 }
 
 fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
@@ -62,7 +119,7 @@ fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
         .map(|i| ListItem::new(vec![Spans::from(Span::raw(*i))]))
         .collect();
     let title = match app.state {
-        AppState::ManualGame => "Manual!",
+        AppState::ManualGame => "Playing!",
         _ => "Select Game",
     };
     let tasks = List::new(tasks)

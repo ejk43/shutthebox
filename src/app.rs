@@ -1,4 +1,4 @@
-use crate::game::{ShutTheBox, Statistics};
+use crate::game::{Dice, ShutTheBox, Statistics};
 use tui::widgets::ListState;
 
 const TASKS: [&str; 5] = [
@@ -9,6 +9,7 @@ const TASKS: [&str; 5] = [
     "Autoplay: Plaid",
 ];
 
+#[derive(PartialEq)]
 pub enum AppState {
     Idle,
     ManualGame,
@@ -25,6 +26,9 @@ pub struct App<'a> {
     pub tasks: StatefulList<&'a str>,
     pub game: ShutTheBox,
     pub stats: Statistics,
+    pub selection: usize,
+    pub dice: Dice,
+    pub staging: Vec<usize>,
 }
 
 impl<'a> App<'a> {
@@ -36,15 +40,22 @@ impl<'a> App<'a> {
             tasks: StatefulList::with_items(TASKS.to_vec()),
             game: ShutTheBox::init(12),
             stats: Statistics::new(),
+            selection: 0,
+            dice: Dice::new(),
+            staging: Vec::with_capacity(5),
         }
     }
 
     pub fn on_up(&mut self) {
-        self.tasks.previous();
+        if self.state == AppState::Idle {
+            self.tasks.previous();
+        }
     }
 
     pub fn on_down(&mut self) {
-        self.tasks.next();
+        if self.state == AppState::Idle {
+            self.tasks.next();
+        }
     }
 
     pub fn on_enter(&mut self) {
@@ -53,23 +64,53 @@ impl<'a> App<'a> {
                 // Start selected game
                 match self.tasks.state.selected() {
                     Some(0) => {
+                        self.tasks.state.select(None);
                         self.state = AppState::ManualGame;
                         self.game = ShutTheBox::init(12);
+                        self.dice.roll();
+                        self.selection = 0;
                     }
                     _ => {}
+                }
+            }
+            AppState::ManualGame => {
+                // If selection is in staging vector, remove it
+                match self.staging.iter().position(|&x| x == self.selection) {
+                    Some(idx) => {
+                        self.staging.remove(idx);
+                    }
+                    None => {
+                        self.staging.push(self.selection);
+                    }
                 }
             }
             _ => {}
         }
     }
 
-    // pub fn on_right(&mut self) {
-    //     self.tabs.next();
-    // }
+    pub fn on_right(&mut self) {
+        match self.state {
+            AppState::ManualGame => {
+                self.select_next();
+                while self.game.get_status(self.selection + 1).unwrap() {
+                    self.select_next();
+                }
+            }
+            _ => {}
+        }
+    }
 
-    // pub fn on_left(&mut self) {
-    //     self.tabs.previous();
-    // }
+    pub fn on_left(&mut self) {
+        match self.state {
+            AppState::ManualGame => {
+                self.select_prev();
+                while self.game.get_status(self.selection + 1).unwrap() {
+                    self.select_prev();
+                }
+            }
+            _ => {}
+        }
+    }
 
     pub fn on_key(&mut self, c: char) {
         match c {
@@ -98,6 +139,19 @@ impl<'a> App<'a> {
 
         // let event = self.barchart.pop().unwrap();
         // self.barchart.insert(0, event);
+    }
+
+    fn select_next(&mut self) {
+        self.selection += 1;
+        if self.selection == self.game.total {
+            self.selection = 0;
+        };
+    }
+    fn select_prev(&mut self) {
+        if self.selection == 0 {
+            self.selection = self.game.total;
+        };
+        self.selection -= 1;
     }
 }
 

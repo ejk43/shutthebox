@@ -43,6 +43,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Key::Char(c) => app.on_key(c),
                 Key::Up => app.on_up(),
                 Key::Down => app.on_down(),
+                Key::Left => app.on_left(),
+                Key::Right => app.on_right(),
                 _ => {}
             },
             Event::Tick => app.on_tick(),

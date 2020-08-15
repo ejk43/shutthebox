@@ -1,3 +1,4 @@
+use crate::app::App;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -12,7 +13,7 @@ use tui::{
     Frame,
 };
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>, list_state: &mut ListState) {
+pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>, app: &mut App) {
     let chunks = Layout::default()
         .constraints([Constraint::Length(12), Constraint::Min(0)].as_ref())
         .split(f.size());
@@ -26,7 +27,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>, list_state: 
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(30), Constraint::Min(0)].as_ref())
         .split(chunks[1]);
-    draw_text(f, chunks2[0], list_state);
+    draw_text(f, chunks2[0], app);
     draw_plots(f, chunks2[1], result);
 }
 
@@ -49,19 +50,14 @@ fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect) {
     }
 }
 
-fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, list_state: &mut ListState) {
+fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     // let block2 = Block::default().title("Selection").borders(Borders::ALL);
     // f.render_widget(block2, area);
 
     // Draw tasks
-    let rawtasks: Vec<&str> = vec![
-        "Play Manually!",
-        "Autoplay: 1x",
-        "Autoplay: 10x",
-        "Autoplay: Fast",
-        "Autoplay: Plaid",
-    ];
-    let tasks: Vec<ListItem> = rawtasks
+    let tasks: Vec<ListItem> = app
+        .tasks
+        .items
         .iter()
         .map(|i| ListItem::new(vec![Spans::from(Span::raw(*i))]))
         .collect();
@@ -69,7 +65,7 @@ fn draw_text<B: Backend>(f: &mut Frame<B>, area: Rect, list_state: &mut ListStat
         .block(Block::default().borders(Borders::ALL).title("List"))
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
-    f.render_stateful_widget(tasks, area, list_state);
+    f.render_stateful_widget(tasks, area, &mut app.tasks.state);
 }
 
 fn draw_plots<B: Backend>(f: &mut Frame<B>, area: Rect, result: &Vec<(f64, f64)>) {

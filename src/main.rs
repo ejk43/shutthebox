@@ -1,8 +1,10 @@
 #[allow(dead_code)]
+mod app;
 mod event;
 pub mod game;
 mod ui;
 
+use crate::app::App;
 use crate::event::{Config, Event, Events};
 
 use std::time::{Duration, Instant};
@@ -11,7 +13,6 @@ use termion::clear;
 use termion::raw::IntoRawMode;
 use termion::{event::Key, input::MouseTerminal, screen::AlternateScreen};
 use tui::backend::TermionBackend;
-use tui::widgets::ListState;
 use tui::Terminal;
 
 use rayon::prelude::*;
@@ -31,40 +32,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..Config::default()
     });
 
-    let mut list_state = ListState::default();
-    list_state.select(Some(0));
+    let mut app = App::new("Shut the Box!");
+    app.tasks.state.select(Some(0));
 
     loop {
-        terminal.draw(|f| ui::draw(f, &result, &mut list_state))?;
+        terminal.draw(|f| ui::draw(f, &result, &mut app))?;
 
-        let mut should_quit = false;
         match events.next()? {
             Event::Input(key) => match key {
-                Key::Char(c) => match c {
-                    'q' => {
-                        should_quit = true;
-                    }
-                    _ => {}
-                },
-                Key::Up => {
-                    let i = match list_state.selected() {
-                        Some(i) => i - 1,
-                        None => 0,
-                    };
-                    list_state.select(Some(i));
-                }
-                Key::Down => {
-                    let i = match list_state.selected() {
-                        Some(i) => i + 1,
-                        None => 0,
-                    };
-                    list_state.select(Some(i));
-                }
+                Key::Char(c) => app.on_key(c),
+                Key::Up => app.on_up(),
+                Key::Down => app.on_down(),
                 _ => {}
             },
-            Event::Tick => {}
+            Event::Tick => app.on_tick(),
         }
-        if should_quit {
+        if app.should_quit {
             break;
         }
     }

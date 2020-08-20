@@ -1,13 +1,17 @@
 use crate::game::{Dice, ShutTheBox, Statistics};
 use tui::widgets::ListState;
 
-const TASKS: [&str; 5] = [
+const IDLE_TASKS: [&str; 5] = [
     "Play Manually!",
     "Autoplay: 1x",
     "Autoplay: 10x",
     "Autoplay: Fast",
     "Autoplay: Plaid",
 ];
+
+const MANUAL_TASKS: [&str; 2] = ["Lock Selection", "Return"];
+const LOST_TASKS: [&str; 2] = ["YOU LOST -- Retry?", "Return"];
+const WON_TASKS: [&str; 2] = ["YOU WON -- Play Again?", "Return"];
 
 #[derive(PartialEq)]
 pub enum AppState {
@@ -19,6 +23,30 @@ pub enum AppState {
     AutoPlaid,
 }
 
+// pub mod AppState {
+//     use super::App;
+//     pub trait Machine {
+//         fn new() -> Self
+//         where
+//             Self: Sized;
+//         fn on_up(self, app: &mut App);
+//         fn on_down(self, app: &mut App);
+//     }
+
+//     pub struct Idle;
+//     impl Machine for Idle {
+//         fn new() -> Self {
+//             Idle
+//         }
+//         fn on_up(self, app: &mut App) {
+//             app.tasks.previous();
+//         };
+//         fn on_down(self, app: &mut App) {
+//             app.tasks.next();
+//         };
+//     }
+// }
+
 pub struct App<'a> {
     pub title: &'a str,
     pub should_quit: bool,
@@ -29,6 +57,8 @@ pub struct App<'a> {
     pub selection: usize,
     pub dice: Dice,
     pub staging: Vec<usize>,
+    pub gameover: bool,
+    pub plotidx: usize,
 }
 
 impl<'a> App<'a> {
@@ -37,25 +67,104 @@ impl<'a> App<'a> {
             title,
             should_quit: false,
             state: AppState::Idle,
-            tasks: StatefulList::with_items(TASKS.to_vec()),
+            tasks: StatefulList::with_items(IDLE_TASKS.to_vec()),
             game: ShutTheBox::init(12),
             stats: Statistics::new(),
             selection: 0,
             dice: Dice::new(),
             staging: Vec::with_capacity(5),
+            gameover: false,
+            plotidx: 0,
         }
     }
 
     pub fn on_up(&mut self) {
-        if self.state == AppState::Idle {
-            self.tasks.previous();
+        match self.state {
+            AppState::Idle => self.tasks.previous(),
+            AppState::ManualGame => match self.tasks.state.selected() {
+                Some(0) => {
+                    if !self.game.victory() {
+                        self.tasks.state.select(None);
+                    }
+                }
+                Some(_) => {
+                    self.tasks.previous();
+                }
+                None => {}
+            },
+            _ => {}
         }
     }
 
     pub fn on_down(&mut self) {
-        if self.state == AppState::Idle {
-            self.tasks.next();
+        match self.state {
+            AppState::Idle => self.tasks.next(),
+            AppState::ManualGame => match self.tasks.state.selected() {
+                Some(idx) => {
+                    if idx == self.tasks.items.len() - 1 {
+                        if !self.game.victory() {
+                            self.tasks.state.select(None);
+                        }
+                    } else {
+                        self.tasks.next();
+                    }
+                }
+                None => {
+                    self.tasks.state.select(Some(0));
+                }
+            },
+            _ => {}
         }
+    }
+
+    fn return_to_menu(&mut self) {
+        self.gameover = false;
+        self.state = AppState::Idle;
+        self.tasks = StatefulList::with_items(IDLE_TASKS.to_vec());
+        self.tasks.state.select(Some(0));
+        self.game = ShutTheBox::init(12);
+    }
+
+    fn end_game(&mut self, result: bool) {
+        let items = if result { WON_TASKS } else { LOST_TASKS };
+        self.gameover = true;
+        self.tasks = StatefulList::with_items(items.to_vec());
+        self.tasks.state.select(Some(0));
+        self.stats.save_game(&self.game);
+    }
+
+    fn reroll(&mut self) {
+        self.tasks.state.select(None);
+        self.staging.clear();
+        let open = self.game.get_open();
+        if open.len() == 0 {
+            // CONGRATULATIONS! You win!
+            self.end_game(true);
+            return;
+        }
+        if open.len() < self.game.total {
+            self.selection = *open
+                .iter()
+                .skip_while(|&x| *x <= self.selection)
+                .next()
+                .unwrap_or(&(&open[0] + 1))
+                - 1;
+        }
+        self.dice.roll();
+        self.game.save_roll(self.dice.result());
+        if self.game.check_loss(self.dice.result()) {
+            self.end_game(false);
+            self.game.check_loss(self.dice.result());
+        }
+    }
+
+    fn new_game(&mut self) {
+        self.state = AppState::ManualGame;
+        self.tasks = StatefulList::with_items(MANUAL_TASKS.to_vec());
+        self.gameover = false;
+        self.game = ShutTheBox::init(12);
+        self.selection = 0;
+        self.reroll();
     }
 
     pub fn on_enter(&mut self) {
@@ -63,25 +172,46 @@ impl<'a> App<'a> {
             AppState::Idle => {
                 // Start selected game
                 match self.tasks.state.selected() {
-                    Some(0) => {
-                        self.tasks.state.select(None);
-                        self.state = AppState::ManualGame;
-                        self.game = ShutTheBox::init(12);
-                        self.dice.roll();
-                        self.selection = 0;
-                    }
+                    Some(0) => self.new_game(),
                     _ => {}
                 }
             }
             AppState::ManualGame => {
-                // If selection is in staging vector, remove it
-                match self.staging.iter().position(|&x| x == self.selection) {
-                    Some(idx) => {
-                        self.staging.remove(idx);
-                    }
+                // Check if tasks are selected
+                match self.tasks.state.selected() {
                     None => {
-                        self.staging.push(self.selection);
+                        // BOXES Selected
+                        // If box selection is in staging vector, remove it
+                        match self.staging.iter().position(|&x| x == self.selection) {
+                            Some(idx) => {
+                                self.staging.remove(idx);
+                            }
+                            None => {
+                                self.staging.push(self.selection);
+                            }
+                        }
                     }
+                    Some(0) => {
+                        // First Item in List
+                        if self.gameover {
+                            self.new_game();
+                        } else {
+                            if self.staging.iter().fold(0, |acc, x| acc + x + 1)
+                                == self.dice.result()
+                            {
+                                // Lock! Shut the boxes
+                                for val in self.staging.iter() {
+                                    self.game.shut(*val + 1);
+                                }
+                                self.reroll();
+                            }
+                        }
+                    }
+                    Some(1) => {
+                        // Return to main menu!
+                        self.return_to_menu();
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -91,6 +221,10 @@ impl<'a> App<'a> {
     pub fn on_right(&mut self) {
         match self.state {
             AppState::ManualGame => {
+                if self.tasks.state.selected().is_some() {
+                    // Dont move left/right when boxes are selected
+                    return;
+                }
                 self.select_next();
                 while self.game.get_status(self.selection + 1).unwrap() {
                     self.select_next();
@@ -103,6 +237,10 @@ impl<'a> App<'a> {
     pub fn on_left(&mut self) {
         match self.state {
             AppState::ManualGame => {
+                if self.tasks.state.selected().is_some() {
+                    // Dont move left/right when boxes are selected
+                    return;
+                }
                 self.select_prev();
                 while self.game.get_status(self.selection + 1).unwrap() {
                     self.select_prev();
@@ -116,6 +254,12 @@ impl<'a> App<'a> {
         match c {
             'q' => {
                 self.should_quit = true;
+            }
+            'p' => {
+                self.plotidx += 1;
+                if self.plotidx > 3 {
+                    self.plotidx = 0;
+                }
             }
             '\n' => {
                 self.on_enter();

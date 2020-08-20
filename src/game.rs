@@ -16,13 +16,14 @@ pub fn simulate_game() -> ShutTheBox {
 
 #[derive(Debug)]
 pub struct Statistics {
-    num_won: u64,
-    num_total: u64,
-    last_won: u64,
+    pub num_won: u64,
+    pub num_total: u64,
+    pub last_won: u64,
     pub games_between_win: Histogram<u64>,
-    count_shut: Vec<u64>,
-    count_nrolls: Vec<u64>,
-    count_lastroll: Vec<u64>,
+    pub count_shut: Vec<u64>,
+    pub count_rawrolls: Vec<u64>,
+    pub count_nrolls: Vec<u64>,
+    pub count_lastroll: Vec<u64>,
 }
 
 impl Statistics {
@@ -37,6 +38,7 @@ impl Statistics {
             last_won: 0,
             games_between_win: Histogram::<u64>::new(4).unwrap(),
             count_shut: vec![0; 12],
+            count_rawrolls: vec![0; 12],
             count_nrolls: vec![0; 12],
             count_lastroll: vec![0; 12],
         }
@@ -53,6 +55,9 @@ impl Statistics {
         self.num_total += 1;
         for (ii, shut) in game.status.iter().enumerate() {
             self.count_shut[ii] += *shut as u64;
+        }
+        for roll in game.rolls.iter() {
+            self.count_rawrolls[roll - 1] += 1;
         }
         // Save Rolls
         let rolls = game.get_rolls();
@@ -91,10 +96,7 @@ fn check_slice(sumvec: &mut VecTotal, slice: &[usize], target: usize) -> bool {
         sumvec.push(slice[ii]);
         let hit = match sumvec.total.cmp(&target) {
             Ordering::Less => check_slice(sumvec, &slice[ii + 1..], target),
-            Ordering::Greater => {
-                sumvec.pop();
-                check_slice(sumvec, &slice[ii + 1..], target)
-            }
+            Ordering::Greater => false,
             Ordering::Equal => true,
         };
         if hit {
@@ -238,6 +240,10 @@ impl ShutTheBox {
             .enumerate()
             .filter(|shut| !*shut.1)
             .map(|pair| pair.0 + 1)
+    }
+
+    pub fn save_roll(&mut self, roll: usize) {
+        self.rolls.push(roll);
     }
 
     /// Return vector of rolls, in the order they were played
@@ -491,5 +497,16 @@ mod tests {
         game.play_roll(4);
         assert_eq!(*game.get_rolls(), vec![4, 4]);
         assert_eq!(*game.get_numbers(), vec![4, 3, 1]);
+    }
+
+    #[test]
+    fn test_shutthebox_assertloss() {
+        let mut game = ShutTheBox::init(12);
+        game.shut(3);
+        game.shut(5);
+        game.shut(6);
+        game.shut(9);
+        game.shut(11);
+        assert_eq!(game.check_loss(5), false);
     }
 }

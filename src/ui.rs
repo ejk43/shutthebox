@@ -64,24 +64,23 @@ fn draw_boxes<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
             .style(Style::default().fg(Color::White))
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
-        if app.state == AppState::ManualGame {
+        if app.state != AppState::Idle {
             let mut style = Style::default();
             if app.game.get_status(ii + 1).unwrap() {
                 // Box is shut
                 style = style.fg(Color::White).bg(Color::Blue);
             }
             let selected = ii == app.selection && app.tasks.state.selected().is_none();
-            if selected {
+            let staged = app.staging.iter().any(|&x| x == ii);
+            if selected && app.state == AppState::ManualGame {
                 // Box is SELECTED
-                style = style.fg(Color::Red);
-            }
-            if app.staging.iter().any(|&x| x == ii) {
-                // Box is STAGED
-                if selected {
-                    style = style.fg(Color::Rgb(128, 0, 128));
+                style = if staged {
+                    style.fg(Color::Rgb(128, 0, 128))
                 } else {
-                    style = style.fg(Color::Blue);
-                }
+                    style.fg(Color::Red)
+                };
+            } else if staged {
+                style = style.fg(Color::Blue);
             }
             paragraph = paragraph.style(style)
         }
@@ -202,7 +201,7 @@ fn create_chart<'a>(
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("{}", ((xhalf as f64) / 2.0) as u64),
+            format!("{}", ((nextpow10 as f64) / 2.0) as u64),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::styled(

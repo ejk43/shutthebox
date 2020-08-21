@@ -1,4 +1,4 @@
-use crate::game::{Dice, ShutTheBox, Statistics};
+use crate::game::{simulate_game, Dice, ShutTheBox, Statistics};
 use tui::widgets::ListState;
 
 const IDLE_TASKS: [&str; 5] = [
@@ -12,6 +12,7 @@ const IDLE_TASKS: [&str; 5] = [
 const MANUAL_TASKS: [&str; 2] = ["Lock Selection", "Return"];
 const LOST_TASKS: [&str; 2] = ["YOU LOST -- Retry?", "Return"];
 const WON_TASKS: [&str; 2] = ["YOU WON -- Play Again?", "Return"];
+const AUTO_TASKS: [&str; 1] = ["Return"];
 
 #[derive(PartialEq)]
 pub enum AppState {
@@ -125,7 +126,7 @@ impl<'a> App<'a> {
         self.game = ShutTheBox::init(12);
     }
 
-    fn end_game(&mut self, result: bool) {
+    fn manual_end_game(&mut self, result: bool) {
         let items = if result { WON_TASKS } else { LOST_TASKS };
         self.gameover = true;
         self.tasks = StatefulList::with_items(items.to_vec());
@@ -133,13 +134,13 @@ impl<'a> App<'a> {
         self.stats.save_game(&self.game);
     }
 
-    fn reroll(&mut self) {
+    fn manual_reroll(&mut self) {
         self.tasks.state.select(None);
         self.staging.clear();
         let open = self.game.get_open();
         if open.len() == 0 {
             // CONGRATULATIONS! You win!
-            self.end_game(true);
+            self.manual_end_game(true);
             return;
         }
         if open.len() < self.game.total {
@@ -153,18 +154,16 @@ impl<'a> App<'a> {
         self.dice.roll();
         self.game.save_roll(self.dice.result());
         if self.game.check_loss(self.dice.result()) {
-            self.end_game(false);
+            self.manual_end_game(false);
             self.game.check_loss(self.dice.result());
         }
     }
 
-    fn new_game(&mut self) {
-        self.state = AppState::ManualGame;
-        self.tasks = StatefulList::with_items(MANUAL_TASKS.to_vec());
+    fn manual_new_game(&mut self) {
         self.gameover = false;
         self.game = ShutTheBox::init(12);
         self.selection = 0;
-        self.reroll();
+        self.manual_reroll();
     }
 
     pub fn on_enter(&mut self) {
@@ -172,7 +171,23 @@ impl<'a> App<'a> {
             AppState::Idle => {
                 // Start selected game
                 match self.tasks.state.selected() {
-                    Some(0) => self.new_game(),
+                    Some(0) => {
+                        self.state = AppState::ManualGame;
+                        self.tasks = StatefulList::with_items(MANUAL_TASKS.to_vec());
+                        self.manual_new_game();
+                    }
+                    Some(1) => {
+                        self.state = AppState::Auto1x;
+                        self.tasks = StatefulList::with_items(AUTO_TASKS.to_vec());
+                        self.tasks.state.select(Some(0));
+                        self.game = ShutTheBox::init(12);
+                        self.dice.roll();
+                    }
+                    Some(2) => {
+                        self.state = AppState::Auto10x;
+                        self.tasks = StatefulList::with_items(AUTO_TASKS.to_vec());
+                        self.tasks.state.select(Some(0));
+                    }
                     _ => {}
                 }
             }
@@ -194,7 +209,7 @@ impl<'a> App<'a> {
                     Some(0) => {
                         // First Item in List
                         if self.gameover {
-                            self.new_game();
+                            self.manual_new_game();
                         } else {
                             if self.staging.iter().fold(0, |acc, x| acc + x + 1)
                                 == self.dice.result()
@@ -203,11 +218,21 @@ impl<'a> App<'a> {
                                 for val in self.staging.iter() {
                                     self.game.shut(*val + 1);
                                 }
-                                self.reroll();
+                                self.manual_reroll();
                             }
                         }
                     }
                     Some(1) => {
+                        // Return to main menu!
+                        self.return_to_menu();
+                    }
+                    _ => {}
+                }
+            }
+            AppState::Auto1x | AppState::Auto10x | AppState::AutoFast | AppState::AutoPlaid => {
+                // Start selected game
+                match self.tasks.state.selected() {
+                    Some(0) => {
                         // Return to main menu!
                         self.return_to_menu();
                     }
@@ -269,20 +294,32 @@ impl<'a> App<'a> {
     }
 
     pub fn on_tick(&mut self) {
-        // Update progress
-        // self.progress += 0.001;
-        // if self.progress > 1.0 {
-        //     self.progress = 0.0;
-        // }
-
-        // self.sparkline.on_tick();
-        // self.signals.on_tick();
-
-        // let log = self.logs.items.pop().unwrap();
-        // self.logs.items.insert(0, log);
-
-        // let event = self.barchart.pop().unwrap();
-        // self.barchart.insert(0, event);
+        match self.state {
+            AppState::Auto1x => {
+                // Play one roll at a time
+                if self.game.victory() {
+                    // Won
+                    self.stats.save_game(&self.game);
+                    self.game = ShutTheBox::init(12);
+                    self.dice.roll();
+                }
+                let valid = self.game.play_roll(self.dice.result());
+                if valid {
+                    self.dice.roll();
+                } else {
+                    // Lost
+                    self.stats.save_game(&self.game);
+                    self.game = ShutTheBox::init(12);
+                    self.dice.roll();
+                }
+            }
+            AppState::Auto10x => {
+                // Play one game at a time
+                self.game = simulate_game();
+                self.stats.save_game(&self.game);
+            }
+            _ => {}
+        }
     }
 
     fn select_next(&mut self) {

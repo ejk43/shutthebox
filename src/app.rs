@@ -257,7 +257,7 @@ impl<'a> App<'a> {
             }
             'p' => {
                 self.plotidx += 1;
-                if self.plotidx > 3 {
+                if self.plotidx > 4 {
                     self.plotidx = 0;
                 }
             }

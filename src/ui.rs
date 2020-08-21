@@ -1,4 +1,5 @@
 use crate::app::{App, AppState};
+use std::cmp;
 use tui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -175,8 +176,65 @@ fn draw_plots<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
         0 => draw_hist_nshut(f, area, app),
         1 => draw_hist_rawrolls(f, area, app),
         2 => draw_hist_nrolls(f, area, app),
+        3 => draw_hist_lastroll(f, area, app),
         _ => draw_hist_wins(f, area, app),
     }
+}
+
+fn create_chart<'a>(
+    data: &'a Vec<(f64, f64)>,
+    title: &'a str,
+    xaxis: &str,
+    yaxis: &str,
+) -> Chart<'a> {
+    let xmax = data.iter().map(|&x| x.0 as u64).max().unwrap() as f64;
+    let xhalf = (xmax + 1.0) / 2.0;
+    let ymax = data.iter().map(|&x| x.1 as u64).max().unwrap() as f64;
+    let nextpow10 = cmp::max(10, 10_u64.pow(ymax.log10().ceil() as u32)) as f64;
+    let x_labels = vec![
+        Span::raw(format!("{}", 1)),
+        Span::raw(format!("{}", xhalf as u64)),
+        Span::raw(format!("{}", xmax as u64 + 1)),
+    ];
+    let y_labels = vec![
+        Span::styled(
+            format!("{}", 1),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{}", ((xhalf as f64) / 2.0) as u64),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{}", nextpow10 as u64),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+    ];
+    let datasets = vec![Dataset::default()
+        .name("Count")
+        .marker(symbols::Marker::Dot)
+        .style(Style::default().fg(Color::Cyan))
+        .data(data)];
+    Chart::new(datasets)
+        .block(
+            Block::default()
+                .title(Span::styled(title, Style::default().fg(Color::White)))
+                .borders(Borders::ALL),
+        )
+        .x_axis(
+            Axis::default()
+                .title("Rolls")
+                .style(Style::default().fg(Color::Gray))
+                .bounds([0.0, xmax])
+                .labels(x_labels),
+        )
+        .y_axis(
+            Axis::default()
+                .title("Count")
+                .style(Style::default().fg(Color::Gray))
+                .bounds([0.0, nextpow10])
+                .labels(y_labels),
+        )
 }
 
 fn draw_hist_nrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
@@ -187,43 +245,12 @@ fn draw_hist_nrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
     f.render_widget(block, area);
-    let x_labels = vec![
-        Span::raw(format!("{}", 0)),
-        Span::raw(format!("{}", 6)),
-        Span::raw(format!("{}", 12)),
-    ];
-    let datasets = vec![Dataset::default()
-        .name("Count")
-        .marker(symbols::Marker::Dot)
-        .style(Style::default().fg(Color::Cyan))
-        .data(&result)];
-    let chart = Chart::new(datasets)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    "Number of Rolls Per Game (Press P to Switch)",
-                    Style::default().fg(Color::White),
-                ))
-                .borders(Borders::ALL),
-        )
-        .x_axis(
-            Axis::default()
-                .title("Rolls")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 12.0])
-                .labels(x_labels),
-        )
-        .y_axis(
-            Axis::default()
-                .title("Count")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 10.0])
-                .labels(vec![
-                    Span::styled("0", Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw("0"),
-                    Span::styled("10", Style::default().add_modifier(Modifier::BOLD)),
-                ]),
-        );
+    let chart = create_chart(
+        &result,
+        "Number of Rolls Per Game (Press P to Switch)",
+        "Rolls",
+        "Count",
+    );
     f.render_widget(chart, area);
 }
 
@@ -235,43 +262,12 @@ fn draw_hist_rawrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
     f.render_widget(block, area);
-    let x_labels = vec![
-        Span::raw(format!("{}", 0)),
-        Span::raw(format!("{}", 6)),
-        Span::raw(format!("{}", 12)),
-    ];
-    let datasets = vec![Dataset::default()
-        .name("Count")
-        .marker(symbols::Marker::Dot)
-        .style(Style::default().fg(Color::Cyan))
-        .data(&result)];
-    let chart = Chart::new(datasets)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    "Dice Roll Count (Press P to Switch)",
-                    Style::default().fg(Color::White),
-                ))
-                .borders(Borders::ALL),
-        )
-        .x_axis(
-            Axis::default()
-                .title("Rolls")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 12.0])
-                .labels(x_labels),
-        )
-        .y_axis(
-            Axis::default()
-                .title("Count")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 10.0])
-                .labels(vec![
-                    Span::styled("0", Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw("0"),
-                    Span::styled("10", Style::default().add_modifier(Modifier::BOLD)),
-                ]),
-        );
+    let chart = create_chart(
+        &result,
+        "Dice Roll Count (Press P to Switch)",
+        "Rolls",
+        "Count",
+    );
     f.render_widget(chart, area);
 }
 
@@ -283,96 +279,47 @@ fn draw_hist_nshut<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
     f.render_widget(block, area);
-    let x_labels = vec![
-        Span::raw(format!("{}", 0)),
-        Span::raw(format!("{}", 6)),
-        Span::raw(format!("{}", 12)),
-    ];
-    let datasets = vec![Dataset::default()
-        .name("Count")
-        .marker(symbols::Marker::Dot)
-        .style(Style::default().fg(Color::Cyan))
-        .data(&result)];
-    let chart = Chart::new(datasets)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    "Boxes Shut (Press P to Switch)",
-                    Style::default().fg(Color::White),
-                ))
-                .borders(Borders::ALL),
-        )
-        .x_axis(
-            Axis::default()
-                .title("Box")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 12.0])
-                .labels(x_labels),
-        )
-        .y_axis(
-            Axis::default()
-                .title("Count")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 10.0])
-                .labels(vec![
-                    Span::styled("0", Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw("0"),
-                    Span::styled("10", Style::default().add_modifier(Modifier::BOLD)),
-                ]),
-        );
+    let chart = create_chart(&result, "Boxes Shut (Press P to Switch)", "Box", "Count");
     f.render_widget(chart, area);
+}
+
+fn draw_hist_lastroll<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
+    let mut result: Vec<(f64, f64)> = Vec::new();
+    for (ii, &total) in app.stats.count_lastroll.iter().enumerate() {
+        result.push((ii as f64, total as f64));
+    }
+
+    let block = Block::default().title("Plots").borders(Borders::ALL);
+    f.render_widget(block, area);
+    let chart = create_chart(&result, "Losing Roll (Press P to Switch)", "Rolls", "Count");
+    f.render_widget(chart, area);
+}
+
+fn arange(min: u64, max: u64, step: u64) -> impl Iterator<Item = (u64, u64)> {
+    (min..max)
+        .step_by(step as usize)
+        .zip(((min + step)..(max + step)).step_by(step as usize))
 }
 
 fn draw_hist_wins<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     let mut sum = 0;
     let mut result: Vec<(f64, f64)> = Vec::new();
-    for bounds in (0..1950).step_by(50).zip((50..2000).step_by(50)) {
+    for bounds in arange(0, 2000, 25) {
         let count = app
             .stats
             .games_between_win
             .count_between(bounds.0, bounds.1 - 1);
         sum += count;
-        result.push(((bounds.0 as f64 + bounds.1 as f64) / 2.0, count as f64));
+        result.push((bounds.1 as f64, count as f64));
     }
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
     f.render_widget(block, area);
-    let x_labels = vec![
-        Span::raw(format!("{}", 0)),
-        Span::raw(format!("{}", 1000)),
-        Span::raw(format!("{}", 2000)),
-    ];
-    let datasets = vec![Dataset::default()
-        .name("Count")
-        .marker(symbols::Marker::Dot)
-        .style(Style::default().fg(Color::Cyan))
-        .data(&result)];
-    let chart = Chart::new(datasets)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    "Games Between Wins (Press P to Switch)",
-                    Style::default().fg(Color::White),
-                ))
-                .borders(Borders::ALL),
-        )
-        .x_axis(
-            Axis::default()
-                .title("Games")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 2000.0])
-                .labels(x_labels),
-        )
-        .y_axis(
-            Axis::default()
-                .title("Count")
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, 200.0])
-                .labels(vec![
-                    Span::styled("-20", Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw("0"),
-                    Span::styled("1000", Style::default().add_modifier(Modifier::BOLD)),
-                ]),
-        );
+    let chart = create_chart(
+        &result,
+        "Games Between Wins (Press P to Switch)",
+        "Games",
+        "Count",
+    );
     f.render_widget(chart, area);
 }

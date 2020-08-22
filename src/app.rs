@@ -1,11 +1,15 @@
 use crate::game::{simulate_game, Dice, ShutTheBox, Statistics};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::{spawn, JoinHandle};
 use tui::widgets::ListState;
+extern crate num_cpus;
 
 const IDLE_TASKS: [&str; 5] = [
     "Play Manually!",
     "Autoplay: 1x",
     "Autoplay: 10x",
-    "Autoplay: Fast",
+    "Autoplay: Ludicrous",
     "Autoplay: Plaid",
 ];
 
@@ -54,12 +58,22 @@ pub struct App<'a> {
     pub state: AppState,
     pub tasks: StatefulList<&'a str>,
     pub game: ShutTheBox,
-    pub stats: Statistics,
+    pub stats: Arc<Mutex<Statistics>>,
     pub selection: usize,
     pub dice: Dice,
     pub staging: Vec<usize>,
     pub gameover: bool,
     pub plotidx: usize,
+    thread_handles: Vec<JoinHandle<()>>,
+    thread_cancel: Arc<AtomicBool>,
+}
+
+fn run_simulations(statsmutex: Arc<Mutex<Statistics>>, cancel_flag: Arc<AtomicBool>) {
+    while !cancel_flag.load(Ordering::SeqCst) {
+        let game = simulate_game();
+        let mut stats = statsmutex.lock().unwrap();
+        stats.save_game(&game);
+    }
 }
 
 impl<'a> App<'a> {
@@ -70,12 +84,14 @@ impl<'a> App<'a> {
             state: AppState::Idle,
             tasks: StatefulList::with_items(IDLE_TASKS.to_vec()),
             game: ShutTheBox::init(12),
-            stats: Statistics::new(),
             selection: 0,
             dice: Dice::new(),
             staging: Vec::with_capacity(5),
             gameover: false,
             plotidx: 0,
+            stats: Arc::new(Mutex::new(Statistics::new())),
+            thread_handles: vec![],
+            thread_cancel: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -131,7 +147,7 @@ impl<'a> App<'a> {
         self.gameover = true;
         self.tasks = StatefulList::with_items(items.to_vec());
         self.tasks.state.select(Some(0));
-        self.stats.save_game(&self.game);
+        self.stats.lock().unwrap().save_game(&self.game);
     }
 
     fn manual_reroll(&mut self) {
@@ -177,6 +193,7 @@ impl<'a> App<'a> {
                         self.manual_new_game();
                     }
                     Some(1) => {
+                        // Auto 1x
                         self.state = AppState::Auto1x;
                         self.tasks = StatefulList::with_items(AUTO_TASKS.to_vec());
                         self.tasks.state.select(Some(0));
@@ -184,9 +201,38 @@ impl<'a> App<'a> {
                         self.dice.roll();
                     }
                     Some(2) => {
+                        // Auto 10x
                         self.state = AppState::Auto10x;
                         self.tasks = StatefulList::with_items(AUTO_TASKS.to_vec());
                         self.tasks.state.select(Some(0));
+                    }
+                    Some(3) => {
+                        //  Auto Ludicrous
+                        self.state = AppState::AutoFast;
+                        self.tasks = StatefulList::with_items(AUTO_TASKS.to_vec());
+                        self.tasks.state.select(Some(0));
+                        self.selection = 0;
+                        self.thread_cancel.store(false, Ordering::SeqCst);
+                        let worker_cancel_flag = self.thread_cancel.clone();
+                        let worker_stats = self.stats.clone();
+                        self.thread_handles.push(spawn(move || {
+                            run_simulations(worker_stats, worker_cancel_flag)
+                        }));
+                    }
+                    Some(4) => {
+                        //  Auto Plaid
+                        self.state = AppState::AutoPlaid;
+                        self.tasks = StatefulList::with_items(AUTO_TASKS.to_vec());
+                        self.tasks.state.select(Some(0));
+                        self.selection = 0;
+                        self.thread_cancel.store(false, Ordering::SeqCst);
+                        for _ in 0..num_cpus::get() {
+                            let worker_cancel_flag = self.thread_cancel.clone();
+                            let worker_stats = self.stats.clone();
+                            self.thread_handles.push(spawn(move || {
+                                run_simulations(worker_stats, worker_cancel_flag)
+                            }));
+                        }
                     }
                     _ => {}
                 }
@@ -229,11 +275,24 @@ impl<'a> App<'a> {
                     _ => {}
                 }
             }
-            AppState::Auto1x | AppState::Auto10x | AppState::AutoFast | AppState::AutoPlaid => {
+            AppState::Auto1x | AppState::Auto10x => {
                 // Start selected game
                 match self.tasks.state.selected() {
                     Some(0) => {
                         // Return to main menu!
+                        self.return_to_menu();
+                    }
+                    _ => {}
+                }
+            }
+            AppState::AutoFast | AppState::AutoPlaid => {
+                match self.tasks.state.selected() {
+                    Some(0) => {
+                        // Return to main menu!
+                        self.thread_cancel.store(true, Ordering::SeqCst);
+                        for handle in self.thread_handles.drain(..) {
+                            handle.join().unwrap();
+                        }
                         self.return_to_menu();
                     }
                     _ => {}
@@ -299,7 +358,7 @@ impl<'a> App<'a> {
                 // Play one roll at a time
                 if self.game.victory() {
                     // Won
-                    self.stats.save_game(&self.game);
+                    self.stats.lock().unwrap().save_game(&self.game);
                     self.game = ShutTheBox::init(12);
                     self.dice.roll();
                 }
@@ -308,7 +367,7 @@ impl<'a> App<'a> {
                     self.dice.roll();
                 } else {
                     // Lost
-                    self.stats.save_game(&self.game);
+                    self.stats.lock().unwrap().save_game(&self.game);
                     self.game = ShutTheBox::init(12);
                     self.dice.roll();
                 }
@@ -316,7 +375,23 @@ impl<'a> App<'a> {
             AppState::Auto10x => {
                 // Play one game at a time
                 self.game = simulate_game();
-                self.stats.save_game(&self.game);
+                self.stats.lock().unwrap().save_game(&self.game);
+            }
+            AppState::AutoFast => {
+                self.game = ShutTheBox::init(12);
+                self.game.shut(self.selection);
+                self.selection += 1;
+                if self.selection >= 12 {
+                    self.selection = 0;
+                }
+            }
+            AppState::AutoPlaid => {
+                self.game = ShutTheBox::init(12);
+                self.game.shut(self.selection);
+                self.selection += 2;
+                if self.selection >= 12 {
+                    self.selection = 0;
+                }
             }
             _ => {}
         }

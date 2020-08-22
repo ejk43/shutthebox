@@ -147,26 +147,27 @@ fn draw_stats<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(40), Constraint::Min(0)].as_ref())
         .split(area);
-    // draw_plots(chunks[1]);
-
-    let span_rolls = Spans::from(Span::styled(
-        format!("Rolls: {:?}", app.game.get_rolls()),
-        Style::default(),
-    ));
-    let span_wins = Spans::from(Span::styled(
-        format!("Wins: {:?}", app.stats.num_won),
-        Style::default(),
-    ));
-    let span_total = Spans::from(Span::styled(
-        format!("Total: {:?}", app.stats.num_total),
-        Style::default(),
-    ));
-    let display = vec![span_rolls, span_wins, span_total];
-    let paragraph = Paragraph::new(display)
-        .block(Block::default().title("Stats").borders(Borders::ALL))
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: true });
-    f.render_widget(paragraph, chunks[0]);
+    {
+        let stats = app.stats.lock().unwrap();
+        let span_rolls = Spans::from(Span::styled(
+            format!("Rolls: {:?}", app.game.get_rolls()),
+            Style::default(),
+        ));
+        let span_wins = Spans::from(Span::styled(
+            format!("Wins: {:?}", stats.num_won),
+            Style::default(),
+        ));
+        let span_total = Spans::from(Span::styled(
+            format!("Total: {:?}", stats.num_total),
+            Style::default(),
+        ));
+        let display = vec![span_rolls, span_wins, span_total];
+        let paragraph = Paragraph::new(display)
+            .block(Block::default().title("Stats").borders(Borders::ALL))
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true });
+        f.render_widget(paragraph, chunks[0]);
+    }
     draw_plots(f, chunks[1], app);
 }
 
@@ -238,8 +239,11 @@ fn create_chart<'a>(
 
 fn draw_hist_nrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     let mut result: Vec<(f64, f64)> = Vec::new();
-    for (ii, &total) in app.stats.count_nrolls.iter().enumerate() {
-        result.push((ii as f64, total as f64));
+    {
+        let stats = app.stats.lock().unwrap();
+        for (ii, &total) in stats.count_nrolls.iter().enumerate() {
+            result.push((ii as f64, total as f64));
+        }
     }
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
@@ -255,10 +259,12 @@ fn draw_hist_nrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 
 fn draw_hist_rawrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     let mut result: Vec<(f64, f64)> = Vec::new();
-    for (ii, &total) in app.stats.count_rawrolls.iter().enumerate() {
-        result.push((ii as f64, total as f64));
+    {
+        let stats = app.stats.lock().unwrap();
+        for (ii, &total) in stats.count_rawrolls.iter().enumerate() {
+            result.push((ii as f64, total as f64));
+        }
     }
-
     let block = Block::default().title("Plots").borders(Borders::ALL);
     f.render_widget(block, area);
     let chart = create_chart(
@@ -272,8 +278,11 @@ fn draw_hist_rawrolls<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 
 fn draw_hist_nshut<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     let mut result: Vec<(f64, f64)> = Vec::new();
-    for (ii, &total) in app.stats.count_shut.iter().enumerate() {
-        result.push((ii as f64, total as f64));
+    {
+        let stats = app.stats.lock().unwrap();
+        for (ii, &total) in stats.count_shut.iter().enumerate() {
+            result.push((ii as f64, total as f64));
+        }
     }
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
@@ -284,8 +293,11 @@ fn draw_hist_nshut<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 
 fn draw_hist_lastroll<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     let mut result: Vec<(f64, f64)> = Vec::new();
-    for (ii, &total) in app.stats.count_lastroll.iter().enumerate() {
-        result.push((ii as f64, total as f64));
+    {
+        let stats = app.stats.lock().unwrap();
+        for (ii, &total) in stats.count_lastroll.iter().enumerate() {
+            result.push((ii as f64, total as f64));
+        }
     }
 
     let block = Block::default().title("Plots").borders(Borders::ALL);
@@ -303,13 +315,15 @@ fn arange(min: u64, max: u64, step: u64) -> impl Iterator<Item = (u64, u64)> {
 fn draw_hist_wins<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
     let mut sum = 0;
     let mut result: Vec<(f64, f64)> = Vec::new();
-    for bounds in arange(0, 2000, 25) {
-        let count = app
-            .stats
-            .games_between_win
-            .count_between(bounds.0, bounds.1 - 1);
-        sum += count;
-        result.push((bounds.1 as f64, count as f64));
+    {
+        let stats = app.stats.lock().unwrap();
+        for bounds in arange(0, 2000, 25) {
+            let count = stats
+                .games_between_win
+                .count_between(bounds.0, bounds.1 - 1);
+            sum += count;
+            result.push((bounds.1 as f64, count as f64));
+        }
     }
 
     let block = Block::default().title("Plots").borders(Borders::ALL);

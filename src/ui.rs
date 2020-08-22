@@ -14,7 +14,7 @@ use tui::{
     Frame,
 };
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, result: &Vec<(f64, f64)>, app: &mut App) {
+pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let chunks = Layout::default()
         .constraints([Constraint::Length(12), Constraint::Min(0)].as_ref())
         .split(f.size());

@@ -379,7 +379,7 @@ impl<'a> App<'a> {
             }
             AppState::AutoFast => {
                 self.game = ShutTheBox::init(12);
-                self.game.shut(self.selection);
+                self.game.shut(self.selection + 1);
                 self.selection += 1;
                 if self.selection >= 12 {
                     self.selection = 0;
@@ -387,7 +387,7 @@ impl<'a> App<'a> {
             }
             AppState::AutoPlaid => {
                 self.game = ShutTheBox::init(12);
-                self.game.shut(self.selection);
+                self.game.shut(self.selection + 1);
                 self.selection += 2;
                 if self.selection >= 12 {
                     self.selection = 0;

@@ -184,8 +184,8 @@ fn draw_plots<B: Backend>(f: &mut Frame<B>, area: Rect, app: &mut App) {
 fn create_chart<'a>(
     data: &'a Vec<(f64, f64)>,
     title: &'a str,
-    xaxis: &str,
-    yaxis: &str,
+    xaxis: &'a str,
+    yaxis: &'a str,
 ) -> Chart<'a> {
     let xmax = data.iter().map(|&x| x.0 as u64).max().unwrap() as f64;
     let xhalf = (xmax + 1.0) / 2.0;
@@ -223,14 +223,14 @@ fn create_chart<'a>(
         )
         .x_axis(
             Axis::default()
-                .title("Rolls")
+                .title(xaxis)
                 .style(Style::default().fg(Color::Gray))
                 .bounds([0.0, xmax])
                 .labels(x_labels),
         )
         .y_axis(
             Axis::default()
-                .title("Count")
+                .title(yaxis)
                 .style(Style::default().fg(Color::Gray))
                 .bounds([0.0, nextpow10])
                 .labels(y_labels),
